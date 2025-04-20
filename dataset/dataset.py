@@ -17,7 +17,7 @@ class MRData():
     """This class used to load MRnet dataset from `./images` dir
     """
 
-    def __init__(self,task = 'acl', train = True, transform = None, weights = None):
+    def __init__(self, stage = "train", transform = None, weights = None):
         """Initialize the dataset
         Args:
             plane : along which plane to load the data
@@ -34,23 +34,32 @@ class MRData():
         self.image_path={}
         
         # If we are in training loop
-        if train:
+        if stage == 'train':
             # Read data about patient records
-            self.records = pd.read_csv('./images/train-{}.csv'.format(task),header=None, names=['id', 'label'])
+            self.records = pd.read_csv('./images/train.csv',header=None, names=['id', 'label'])
 
             for plane in self.planes:
                 # For each plane, specify the image path
                 self.image_path[plane] = './images/train/{}/'.format(plane)
-        else:
+        elif stage == 'val':
             # If we are in testing loop
             # don't use any transformation
             transform = None
             # Read testing/validation data (patients records)
-            self.records = pd.read_csv('./images/valid-{}.csv'.format(task),header=None, names=['id', 'label'])
+            self.records = pd.read_csv('./images/val.csv',header=None, names=['id', 'label'])
             
             for plane in self.planes:
                 # Read path of images for each plane
-                self.image_path[plane] = './images/valid/{}/'.format(plane)
+                self.image_path[plane] = './images/val/{}/'.format(plane)
+                
+        else:
+            transform = None
+            # Read testing/validation data (patients records)
+            self.records = pd.read_csv('./images/test.csv',header=None, names=['id', 'label'])
+            
+            for plane in self.planes:
+                # Read path of images for each plane
+                self.image_path[plane] = './images/test/{}/'.format(plane)
 
         # Initialize the transformation to apply on images
         self.transform = transform 
@@ -84,10 +93,8 @@ class MRData():
         self.weights = torch.FloatTensor(class_weights.tolist())
         print('Class weights for loss are:', self.weights)
 
-        
-        print('Number of -ve samples : ', neg)
-        print('Number of +ve samples : ', pos)
-        print('Weights for loss is : ', self.weights)
+        print(f'Total samples: {len(self.labels)} | Num classes: {num_classes}')
+
 
     def __len__(self):
         """Return the total number of images in the dataset."""
@@ -108,11 +115,8 @@ class MRData():
             img_raw[plane] = self._resize_image(img_raw[plane])
             
         label = self.labels[index]
-        # Convert label to 0 and 1
-        if label == 1:
-            label = torch.FloatTensor([1])
-        elif label == 0:
-            label = torch.FloatTensor([0])
+        # Set the label
+        label = torch.tensor(self.labels[index]).long()
 
         # Return a list of three images for three planes and the label of the record
         return [img_raw[plane] for plane in self.planes], label
@@ -144,7 +148,7 @@ class MRData():
         image = torch.FloatTensor(image)
         return image
 
-def load_data(task : str):
+def load_data():
 
     # Define the Augmentation here only
     augments = Compose([
@@ -162,18 +166,25 @@ def load_data(task : str):
         transforms.Lambda(lambda x: x.repeat(3, 1, 1, 1).permute(1, 0, 2, 3)),
     ])
 
-    print('Loading Train Dataset of {} task...'.format(task))
+    print('Loading Train Dataset of ACL task...')
     # Load training dataset
-    train_data = MRData(task, train=True, transform=augments)
+    train_data = MRData(stage='train', transform=augments)
     train_loader = data.DataLoader(
         train_data, batch_size=1, num_workers=11, shuffle=True
     )
 
-    print('Loading Validation Dataset of {} task...'.format(task))
+    print('Loading Validation Dataset of ACL task...')
     # Load validation dataset
-    val_data = MRData(task, train=False)
+    val_data = MRData(stage='val')
     val_loader = data.DataLoader(
         val_data, batch_size=1, num_workers=11, shuffle=False
     )
+    
+    print('Loading Testing Dataset of ACL task...')
+    # Load validation dataset
+    test_data = MRData(stage='test')
+    test_loader = data.DataLoader(
+        test_data, batch_size=1, num_workers=11, shuffle=False
+    )
 
-    return train_loader, val_loader, train_data.weights, val_data.weights
+    return train_loader, val_loader, test_loader, train_data.weights, val_data.weights, test_data.weights
