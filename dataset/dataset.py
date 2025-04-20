@@ -17,7 +17,7 @@ class MRData():
     """This class used to load MRnet dataset from `./images` dir
     """
 
-    def __init__(self,task = 'acl', train = True, transform = None, weights = None):
+    def __init__(self, mode = 'train', transform = None, weights = None):
         """Initialize the dataset
         Args:
             plane : along which plane to load the data
@@ -34,23 +34,34 @@ class MRData():
         self.image_path={}
         
         # If we are in training loop
-        if train:
+        if mode == 'train':
             # Read data about patient records
-            self.records = pd.read_csv('./images/train-{}.csv'.format(task),header=None, names=['id', 'label'])
+            self.records = pd.read_csv('./images/train.csv'.format(task),header=None, names=['id', 'label'])
 
             for plane in self.planes:
                 # For each plane, specify the image path
                 self.image_path[plane] = './images/train/{}/'.format(plane)
+        elif mode == 'val':
+            # If we are in testing loop
+            # don't use any transformation
+            transform = None
+            # Read testing/validation data (patients records)
+            self.records = pd.read_csv('./images/val.csv'.format(task),header=None, names=['id', 'label'])
+            
+            for plane in self.planes:
+                # Read path of images for each plane
+                self.image_path[plane] = './images/valid/{}/'.format(plane)
+                
         else:
             # If we are in testing loop
             # don't use any transformation
             transform = None
             # Read testing/validation data (patients records)
-            self.records = pd.read_csv('./images/valid-{}.csv'.format(task),header=None, names=['id', 'label'])
+            self.records = pd.read_csv('./images/test.csv'.format(task),header=None, names=['id', 'label'])
             
             for plane in self.planes:
                 # Read path of images for each plane
-                self.image_path[plane] = './images/valid/{}/'.format(plane)
+                self.image_path[plane] = './images/test/{}/'.format(plane)
 
         # Initialize the transformation to apply on images
         self.transform = transform 
