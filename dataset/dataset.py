@@ -65,8 +65,8 @@ class MRData():
         self.transform = transform 
 
         # Append 0s to the patient record id
-        self.records['id'] = self.records['id'].map(
-            lambda i: '0' * (4 - len(str(i))) + str(i))
+        # self.records['id'] = self.records['id'].map(
+        #     lambda i: '0' * (4 - len(str(i))) + str(i))
         # empty dictionary
         self.paths={}
         for plane in self.planes:
@@ -116,7 +116,7 @@ class MRData():
             
         label = self.labels[index]
         # Set the label
-        label = torch.tensor(self.labels[index]).long()
+        label = torch.tensor(int(self.labels[index])).long()
 
         # Return a list of three images for three planes and the label of the record
         return [img_raw[plane] for plane in self.planes], label
