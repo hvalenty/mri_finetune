@@ -10,90 +10,55 @@ def _get_trainable_params(model):
             trainable_params.append(x)
     return trainable_params
 
-def _evaluate_model(model, val_loader, criterion, epoch, num_epochs, writer, current_lr, log_every=20):
-    """Runs model over val dataset and returns auc and avg val loss"""
+def _evaluate_model(model, val_loader, criterion, epoch, num_epochs, writer, current_lr, log_every=2):
+    """Runs model over val dataset and returns accuracy and avg val loss"""
 
-    # Set to eval mode
     model.eval()
-
-    y_probs = [[],[],[]]
-    y_gt = [[],[],[]]
+    y_preds = []
+    y_gt = []
     losses = []
 
-    for i, (images, label) in enumerate(val_loader):
+    with torch.no_grad():
+        for i, (images, label) in enumerate(val_loader):
+            if torch.cuda.is_available():
+                images = [image.cuda() for image in images]
+                label = label.cuda().long()
+                if label.dim() == 0:
+                    label = label.unsqueeze(0)
 
-        if torch.cuda.is_available():
-            images = [image.cuda() for image in images]
-            label = label.cuda()
 
-        output = model(images)
+            output = model(images)
+            loss = criterion(output, label)
+            loss_value = loss.item()
+            losses.append(loss_value)
 
-        loss = criterion(output, label)
+            # Convert output to predicted class
+            pred_classes = torch.argmax(output, dim=1)
 
-        loss_value = loss.item()
-        losses.append(loss_value)
+            # Store predictions and true labels
+            y_gt.extend(label.cpu().numpy().tolist())
+            y_preds.extend(pred_classes.cpu().numpy().tolist())
 
-        probas = torch.sigmoid(output)
+            acc = metrics.accuracy_score(y_gt, y_preds)
 
-        for j, x in enumerate(label[0]):
-            y_gt[j].append(int(label[0][j].item()))
-        
-        for j, x in enumerate(probas[0]):
-            y_probs[j].append(probas[0][j].item())
+            writer.add_scalar('Val/Loss', loss_value, epoch * len(val_loader) + i)
+            writer.add_scalar('Val/Accuracy', acc, epoch * len(val_loader) + i)
 
-        aucs = []
-        for j in range(3):
-            try:
-                aucs.append(metrics.roc_auc_score(y_gt[j], y_probs[j]))
-            except:
-                aucs.append(0.5)
+            if (i % 2 == 0):
+                print(f'''[Epoch: {epoch + 1} / {num_epochs} | Batch : {i} / {len(val_loader)} ]| Avg Val Loss: {np.mean(losses):.4f} | Val Accuracy: {acc:.4f} | lr: {current_lr}''')
 
-        writer.add_scalar('Val/Loss', loss_value, epoch * len(val_loader) + i)
-        writer.add_scalar('Val/AUC', np.mean(aucs), epoch * len(val_loader) + i)
-        writer.add_scalar('Val/AUC_abnormal', aucs[0], epoch * len(val_loader) + i)
-        writer.add_scalar('Val/AUC_acl', aucs[1], epoch * len(val_loader) + i)
-        writer.add_scalar('Val/AUC_meniscus', aucs[2], epoch * len(val_loader) + i)
-
-        if (i % log_every == 0) & (i > 0):
-            print('''[Epoch: {0} / {1} | Batch : {2} / {3} ]| Avg Val Loss {4} | Val AUC : {5} abnorm:{6} acl:{7} meni:{8} | lr : {9}'''.
-                  format(
-                      epoch + 1,
-                      num_epochs,
-                      i,
-                      len(val_loader),
-                      np.round(np.mean(losses), 4),
-                      np.round(np.mean(aucs), 4),
-                      np.round(aucs[0], 4),
-                      np.round(aucs[1], 4),
-                      np.round(aucs[2], 4),
-                      current_lr
-                  )
-                  )
-
-    writer.add_scalar('Val/AUC_epoch', np.mean(aucs), epoch)
-    writer.add_scalar('Val/AUC_epoch_abnormal', aucs[0], epoch)
-    writer.add_scalar('Val/AUC_epoch_acl', aucs[1], epoch)
-    writer.add_scalar('Val/AUC_epoch_meniscus', aucs[2], epoch)
-
-    print('Epoch {} End Val Avg AUC : {} abnorm : {} acl : {} meni : {}'.format(epoch, 
-                                                                            np.round(np.mean(aucs), 4), 
-                                                                            np.round(aucs[0], 4),
-                                                                            np.round(aucs[1], 4),
-                                                                            np.round(aucs[2], 4),))
-    
+    writer.add_scalar('Val/Accuracy_epoch', acc, epoch + i)
 
     val_loss_epoch = np.round(np.mean(losses), 4)
-    val_auc_epoch = np.round(np.mean(aucs), 4)
+    val_acc_epoch = np.round(acc, 4)
 
-    return val_loss_epoch, val_auc_epoch
+    return val_loss_epoch, val_acc_epoch
 
-def _train_model(model, train_loader, epoch, num_epochs, optimizer, criterion, writer, current_lr, log_every=100):
-    
-    # Set to train mode
+def _train_model(model, train_loader, epoch, num_epochs, optimizer, criterion, writer, current_lr, log_every=2):
     model.train()
 
-    y_probs = [[],[],[]]
-    y_gt = [[],[],[]]
+    y_preds = []
+    y_gt = []
     losses = []
 
     for i, (images, label) in enumerate(train_loader):
@@ -101,74 +66,40 @@ def _train_model(model, train_loader, epoch, num_epochs, optimizer, criterion, w
 
         if torch.cuda.is_available():
             images = [image.cuda() for image in images]
-            label = label.cuda()
+            label = label.cuda().long()
+            if label.dim() == 0:
+                label = label.unsqueeze(0)
 
-        output = model(images)
+        output = model(images)  # shape: [batch_size, 4]
 
         loss = criterion(output, label)
         loss.backward()
         optimizer.step()
 
-        loss_value = loss.item()
-        losses.append(loss_value)
+        losses.append(loss.item())
 
-        probas = torch.sigmoid(output)
-
-        for j, x in enumerate(label[0]):
-            y_gt[j].append(int(label[0][j].item()))
-        
-        for j, x in enumerate(probas[0]):
-            y_probs[j].append(probas[0][j].item())
-
-        aucs = []
-        for j in range(3):
-            try:
-                aucs.append(metrics.roc_auc_score(y_gt[j], y_probs[j]))
-            except:
-                # print("nope")
-                # print(y_gt, y_probs)
-                aucs.append(0.5)
-        
-
-        writer.add_scalar('Train/Loss', loss_value,
-                          epoch * len(train_loader) + i)
-        writer.add_scalar('Train/AUC', np.mean(aucs), epoch * len(train_loader) + i)
-        writer.add_scalar('Train/AUC_abnormal', aucs[0], epoch * len(train_loader) + i)
-        writer.add_scalar('Train/AUC_acl', aucs[1], epoch * len(train_loader) + i)
-        writer.add_scalar('Train/AUC_meniscus', aucs[2], epoch * len(train_loader) + i)
+        # Convert logits to class predictions
+        pred_classes = torch.argmax(output, dim=1)
 
 
-        if (i % log_every == 0) & (i > 0):
-            print('''[Epoch: {0} / {1} | Batch : {2} / {3} ]| Avg Train Loss {4} | Train Avg AUC : {5} abnorm:{6} acl:{7} meni:{8} | lr : {9}'''.
-                  format(
-                      epoch + 1,
-                      num_epochs,
-                      i,
-                      len(train_loader),
-                      np.round(np.mean(losses), 4),
-                      np.round(np.mean(aucs), 4),
-                      np.round(aucs[0], 4),
-                      np.round(aucs[1], 4),
-                      np.round(aucs[2], 4),
-                      current_lr
-                  )
-                  )
+        y_gt.extend(label.cpu().numpy().tolist())
+        y_preds.extend(pred_classes.cpu().numpy().tolist())
 
-    writer.add_scalar('Train/AUC_epoch', np.mean(aucs), epoch)
-    writer.add_scalar('Train/AUC_epoch_abnormal', aucs[0], epoch)
-    writer.add_scalar('Train/AUC_epoch_acl', aucs[1], epoch)
-    writer.add_scalar('Train/AUC_epoch_meniscus', aucs[2], epoch)
+        acc = metrics.accuracy_score(y_gt, y_preds)
+
+
+        writer.add_scalar('Train/Loss', loss.item(), epoch * len(train_loader) + i)
+        writer.add_scalar('Train/Accuracy', acc, epoch * len(train_loader) + i)
+
+        if (i % 2 == 0):
+            print(f'''[Epoch: {epoch + 1} / {num_epochs} | Batch : {i} / {len(train_loader)} ]| Avg Train Loss: {np.mean(losses):.4f} | Accuracy: {acc:.4f} | lr: {current_lr}''')
+
+    writer.add_scalar('Train/Accuracy_epoch', acc, epoch + i)
 
     train_loss_epoch = np.round(np.mean(losses), 4)
-    train_auc_epoch = np.round(np.mean(aucs), 4)
+    train_acc_epoch = np.round(acc, 4)
 
-    print('Epoch {} End Train Avg AUC : {} abnorm : {} acl : {} meni : {}'.format(epoch, 
-                                                                            np.round(np.mean(aucs), 4), 
-                                                                            np.round(aucs[0], 4),
-                                                                            np.round(aucs[1], 4),
-                                                                            np.round(aucs[2], 4),))
-
-    return train_loss_epoch, train_auc_epoch
+    return train_loss_epoch, train_acc_epoch
 
 def _get_lr(optimizer):
     for param_group in optimizer.param_groups:
