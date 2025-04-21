@@ -22,7 +22,10 @@ def _evaluate_model(model, val_loader, criterion, epoch, num_epochs, writer, cur
         for i, (images, label) in enumerate(val_loader):
             if torch.cuda.is_available():
                 images = [image.cuda() for image in images]
-                label = label.cuda().long().squeeze()
+                label = label.cuda().long()
+                if label.dim() == 0:
+                    label = label.unsqueeze(0)
+
 
             output = model(images)
             loss = criterion(output, label)
@@ -66,7 +69,9 @@ def _train_model(model, train_loader, epoch, num_epochs, optimizer, criterion, w
 
         if torch.cuda.is_available():
             images = [image.cuda() for image in images]
-            label = label.cuda().long().squeeze()  # <-- make sure label is LongTensor for CE loss
+            label = label.cuda().long()
+            if label.dim() == 0:
+                label = label.unsqueeze(0)
 
         output = model(images)  # shape: [batch_size, 4]
 
