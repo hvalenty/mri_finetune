@@ -10,7 +10,7 @@ def _get_trainable_params(model):
             trainable_params.append(x)
     return trainable_params
 
-def _evaluate_model(model, val_loader, criterion, epoch, num_epochs, writer, current_lr, log_every=20):
+def _evaluate_model(model, val_loader, criterion, epoch, num_epochs, writer, current_lr, log_every=2):
     """Runs model over val dataset and returns accuracy and avg val loss"""
 
     model.eval()
@@ -39,15 +39,12 @@ def _evaluate_model(model, val_loader, criterion, epoch, num_epochs, writer, cur
             y_gt.extend(label.cpu().numpy().tolist())
             y_preds.extend(pred_classes.cpu().numpy().tolist())
 
-            try:
-                acc = accuracy_score(y_gt, y_preds)
-            except:
-                acc = 0.0
+            acc = metrics.accuracy_score(y_gt, y_preds)
 
             writer.add_scalar('Val/Loss', loss_value, epoch * len(val_loader) + i)
             writer.add_scalar('Val/Accuracy', acc, epoch * len(val_loader) + i)
 
-            if (i % log_every == 0) and (i > 0):
+            if (i % 2 == 0):
                 print(f'''[Epoch: {epoch + 1} / {num_epochs} | Batch : {i} / {len(val_loader)} ]| Avg Val Loss: {np.mean(losses):.4f} | Val Accuracy: {acc:.4f} | lr: {current_lr}''')
 
     writer.add_scalar('Val/Accuracy_epoch', acc, epoch + i)
@@ -57,7 +54,7 @@ def _evaluate_model(model, val_loader, criterion, epoch, num_epochs, writer, cur
 
     return val_loss_epoch, val_acc_epoch
 
-def _train_model(model, train_loader, epoch, num_epochs, optimizer, criterion, writer, current_lr, log_every=100):
+def _train_model(model, train_loader, epoch, num_epochs, optimizer, criterion, writer, current_lr, log_every=2):
     model.train()
 
     y_preds = []
@@ -84,18 +81,17 @@ def _train_model(model, train_loader, epoch, num_epochs, optimizer, criterion, w
         # Convert logits to class predictions
         pred_classes = torch.argmax(output, dim=1)
 
+
         y_gt.extend(label.cpu().numpy().tolist())
         y_preds.extend(pred_classes.cpu().numpy().tolist())
 
-        try:
-            acc = accuracy_score(y_gt, y_preds)
-        except:
-            acc = 0.0
+        acc = metrics.accuracy_score(y_gt, y_preds)
+
 
         writer.add_scalar('Train/Loss', loss.item(), epoch * len(train_loader) + i)
         writer.add_scalar('Train/Accuracy', acc, epoch * len(train_loader) + i)
 
-        if (i % log_every == 0) and (i > 0):
+        if (i % 2 == 0):
             print(f'''[Epoch: {epoch + 1} / {num_epochs} | Batch : {i} / {len(train_loader)} ]| Avg Train Loss: {np.mean(losses):.4f} | Accuracy: {acc:.4f} | lr: {current_lr}''')
 
     writer.add_scalar('Train/Accuracy_epoch', acc, epoch + i)
