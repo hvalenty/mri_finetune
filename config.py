@@ -1,7 +1,7 @@
 config = {
-    'max_epoch' : 50,
+    'max_epoch' : 500,
     'log_train' : 100,
-    'lr' : 1e-3,
+    'lr' : 1e-4,
     'starting_epoch' : 0,
     'batch_size' : 1,
     'log_val' : 10,

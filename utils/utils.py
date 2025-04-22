@@ -38,6 +38,8 @@ def _evaluate_model(model, val_loader, criterion, epoch, num_epochs, writer, cur
             # Store predictions and true labels
             y_gt.extend(label.cpu().numpy().tolist())
             y_preds.extend(pred_classes.cpu().numpy().tolist())
+            
+            print(f" Pred {pred_classes.cpu().numpy().tolist()} vs Ground Truth {label.cpu().numpy().tolist()}")
 
             acc = metrics.accuracy_score(y_gt, y_preds)
 
@@ -84,6 +86,8 @@ def _train_model(model, train_loader, epoch, num_epochs, optimizer, criterion, w
 
         y_gt.extend(label.cpu().numpy().tolist())
         y_preds.extend(pred_classes.cpu().numpy().tolist())
+        
+        print(f" Pred {pred_classes.cpu().numpy().tolist()} vs Ground Truth {label.cpu().numpy().tolist()}")
 
         acc = metrics.accuracy_score(y_gt, y_preds)
 
